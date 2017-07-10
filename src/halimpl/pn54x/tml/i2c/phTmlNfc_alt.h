@@ -30,10 +30,10 @@
 
 #if (CONFIGURATION == 1)
 /* OM557x on Raspberry Pi */
- #define I2C_BUS         "/dev/i2c-1"
+ #define I2C_BUS         "/dev/i2c-0"
  #define I2C_ADDRESS     0x28
- #define PIN_INT         23
- #define PIN_ENABLE      24
+ #define PIN_INT         2
+ #define PIN_ENABLE      3
 #elif (CONFIGURATION == 2)
 /* OM557x on UdooNeo */
  #define I2C_BUS         "/dev/i2c-1"

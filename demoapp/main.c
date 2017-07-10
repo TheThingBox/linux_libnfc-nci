@@ -93,7 +93,7 @@ const unsigned char T4T_NDEF_EMU_NOK[] = {0x6A, 0x82};
 
 unsigned char *pT4T_NdefRecord = NULL;
 unsigned short T4T_NdefRecord_size = 0;
-
+FILE *nfc_log;
 
 
 typedef void T4T_NDEF_EMU_Callback_t (unsigned char*, unsigned short);
@@ -318,7 +318,7 @@ void onTagArrival(nfc_tag_info_t *pTagInfo)
 	
 	if(eDevState_WAIT_ARRIVAL == g_DevState)
 	{	
-		printf("\tNFC Tag Found\n\n");
+		//printf("\tNFC Tag Found\n\n");
 		memcpy(&g_TagInfo, pTagInfo, sizeof(nfc_tag_info_t));
 		g_DevState = eDevState_PRESENT;
 		g_Dev_Type = eDevType_TAG;
@@ -353,7 +353,7 @@ void onTagDeparture(void)
 	
 	if(eDevState_WAIT_DEPARTURE == g_DevState)
 	{
-		printf("\tNFC Tag Lost\n\n");
+		//printf("\tNFC Tag Lost\n\n");
 		g_DevState = eDevState_DEPARTED;
 		g_Dev_Type = eDevType_NONE;
 		framework_NotifyMutex(g_devLock, 0);
@@ -1265,7 +1265,7 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 		
 		else if(eDevState_PRESENT != g_DevState)
 		{
-			printf("Waiting for a Tag/Device...\n\n");
+			//printf("Waiting for a Tag/Device...\n\n");
 			g_DevState = eDevState_WAIT_ARRIVAL;
 			framework_WaitMutex(g_devLock, 0);
 		}
@@ -1281,62 +1281,64 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 			DevTypeBck = g_Dev_Type;
 			if(eDevType_TAG == g_Dev_Type)
 			{
-				memcpy(&TagInfo, &g_TagInfo, sizeof(nfc_tag_info_t));
+				nfc_log= fopen("/root/userdir/nfc.log", "w+");
+				fprintf(nfc_log,"{\n");
+                                memcpy(&TagInfo, &g_TagInfo, sizeof(nfc_tag_info_t));
 				framework_UnlockMutex(g_devLock);
-				printf("		Type : ");
+				fprintf(nfc_log,"		\"Type\" : ");
 				switch (TagInfo.technology)
 				{
 					case TARGET_TYPE_UNKNOWN:
 					{
-						printf("		'Type Unknown'\n");
+						fprintf(nfc_log,"		'Type Unknown',\n");
 					} break;
 					case TARGET_TYPE_ISO14443_3A:
 					{
-						printf("		'Type A'\n");
+						fprintf(nfc_log,"		\"Type A\",\n");
 					} break;
 					case TARGET_TYPE_ISO14443_3B:
 					{
-						printf("		'Type 4B'\n");
+						fprintf(nfc_log,"		\"Type 4B\",\n");
 					} break;
 					case TARGET_TYPE_ISO14443_4:
 					{
-						printf("		'Type 4A'\n");
+						fprintf(nfc_log,"		\"Type 4A\",\n");
 					} break;
 					case TARGET_TYPE_FELICA:
 					{
-						printf("		'Type F'\n");
+						fprintf(nfc_log,"		\"Type F\",\n");
 					} break;
 					case TARGET_TYPE_ISO15693:
 					{
-						printf("		'Type V'\n");
+						fprintf(nfc_log,"		\"Type V\",\n");
 					} break;
 					case TARGET_TYPE_NDEF:
 					{
-						printf("		'Type NDEF'\n");
+						fprintf(nfc_log,"		\"Type NDEF\",\n");
 					} break;
 					case TARGET_TYPE_NDEF_FORMATABLE:
 					{
-						printf("		'Type Formatable'\n");
+						fprintf(nfc_log,"		\"Type Formatable\",\n");
 					} break;
 					case TARGET_TYPE_MIFARE_CLASSIC:
 					{
-						printf("		'Type A - Mifare Classic'\n");
+						fprintf(nfc_log,"		\"Type A - Mifare Classic\",\n");
 					} break;
 					case TARGET_TYPE_MIFARE_UL:
 					{
-						printf("		'Type A - Mifare Ul'\n");
+						fprintf(nfc_log,"		\"Type A - Mifare Ul\",\n");
 					} break;
 					case TARGET_TYPE_KOVIO_BARCODE:
 					{
-						printf("		'Type A - Kovio Barcode'\n");
+						fprintf(nfc_log,"		\"Type A - Kovio Barcode\",\n");
 					} break;
 					case TARGET_TYPE_ISO14443_3A_3B:
 					{
-						printf("		'Type A/B'\n");
+						fprintf(nfc_log,"		\#Type A/B\",\n");
 					} break;
 					default:
 					{
-						printf("		'Type %d (Unknown or not supported)'\n", TagInfo.technology);
+						fprintf(nfc_log,"		\"Type %d (Unknown or not supported)\",\n", TagInfo.technology);
 					} break;
 				}
 				/*32 is max UID len (Kovio tags)*/
@@ -1344,22 +1346,22 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 				{
 					if(4 == TagInfo.uid_length || 7 == TagInfo.uid_length || 10 == TagInfo.uid_length)
 					{
-						printf("		NFCID1 :    \t'");
+						fprintf(nfc_log,"		\"NFCID1\" :    \t\"");
 					}
 					else if(8 == TagInfo.uid_length)
 					{
-						printf("		NFCID2 :    \t'");
+						fprintf(nfc_log,"		\"NFCID2\" :    \t\"");
 					}
 					else
 					{
-						printf("		UID :       \t'");
+						fprintf(nfc_log,"		\#UID\" :       \t\"");
 					}
 					
 					for(i = 0x00; i < TagInfo.uid_length; i++)
 					{
-						printf("%02X ", (unsigned char) TagInfo.uid[i]);
+						fprintf(nfc_log,"%02X ", (unsigned char) TagInfo.uid[i]);
 					}
-					printf("'\n");
+					fprintf(nfc_log,"\",\n");
 				}
 
 				res = nfcTag_isNdef(TagInfo.handle, &NDEFinfo);
@@ -1370,7 +1372,7 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 				}
 				else
 				{
-					printf("\t\tNDEF Content : NO, mode=%d, tech=%d\n", mode, TagInfo.technology);
+					fprintf(nfc_log,"\t\t\"NDEF Content\" : \"NO, mode=%d, tech=%d\",\n", mode, TagInfo.technology);
 					
 			        if(0x03 == mode)
 			        {
@@ -1378,7 +1380,7 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
                         {
 				            if(Format_MIFARE_CLASSIC(TagInfo))
                             {
-						        printf("\n\t\tMifare Formating succeed\n");
+						        //printf("\n\t\tMifare Formating succeed\n");
                 				nfcTag_isNdef(TagInfo.handle, &NDEFinfo);
                             }
                             else
@@ -1409,12 +1411,13 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 						}
 						else
 						{
-							printf("\n\t\tMifare Authenticate command sent\n\t\tResponse : \n\t\t");
+							//printf("\n\t\tMifare Authenticate command sent\n\t\tResponse : \n\t\t");
+							fprintf(nfc_log,"\t\t\"Response auth\" : \t\t\"");
 							for(i = 0x00; i < (unsigned int) res; i++)
 							{
-								printf("%02X ", MifareAuthResp[i]);
+								fprintf(nfc_log,"%02X ", MifareAuthResp[i]);
 							}
-							printf("\n");
+							fprintf(nfc_log,"\",\n");
 							
 							res = nfcTag_transceive(TagInfo.handle, MifareReadCmd, 2, MifareResp, 255, 500);
 							if(0x00 == res)
@@ -1423,12 +1426,13 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 							}
 							else
 							{
-								printf("\n\t\tMifare Read command sent\n\t\tResponse : \n\t\t");
+								//printf("\n\t\tMifare Read command sent\n\t\tResponse : \n\t\t");
+								fprintf(nfc_log,"\t\t\"Response read\" : \t\t\"");
 								for(i = 0x00; i < (unsigned int)res; i++)
 								{
-									printf("%02X ", MifareResp[i]);
+									fprintf(nfc_log,"%02X ", MifareResp[i]);
 								}
-								printf("\n\n");
+								fprintf(nfc_log,"\"\n");
 							}
 						}
 					}
@@ -1475,6 +1479,8 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 						}
 					}
                 }
+				fprintf(nfc_log,"}\n");
+				fclose(nfc_log);
  				framework_LockMutex(g_devLock);
 			}
 			else if(eDevType_P2P == g_Dev_Type)/*P2P Detected*/
@@ -1929,12 +1935,13 @@ void cmd_poll(int arg_len, char** arg)
 {
 	int res = 0x00;
 	
+/*
 	printf("#########################################################################################\n");
 	printf("##                                       NFC demo                                      ##\n");
 	printf("#########################################################################################\n");
 	printf("##                                 Poll mode activated                                 ##\n");
 	printf("#########################################################################################\n");
-	
+*/	
 	InitEnv();
 
 	if(0x00 == LookForTag(arg, arg_len, "-h", NULL, 0x00) || 0x00 == LookForTag(arg, arg_len, "--help", NULL, 0x01))
@@ -1954,7 +1961,7 @@ void cmd_poll(int arg_len, char** arg)
 	}
 	
 	
-	printf("Leaving ...\n");
+//	printf("Leaving ...\n");
 }
 
  
@@ -2103,8 +2110,8 @@ void cmd_write(int arg_len, char** arg)
 
 void* ExitThread(void* pContext)
 {
-	printf("                              ... press enter to quit ...\n\n");
-	
+	//printf("                              ... press enter to quit ...\n\n");
+/*	
 	getchar();
 	
 	framework_LockMutex(g_SnepClientLock);
@@ -2133,6 +2140,7 @@ void* ExitThread(void* pContext)
 	}
 	
 	framework_UnlockMutex(g_devLock);
+*/
 	return NULL;
 }
 
