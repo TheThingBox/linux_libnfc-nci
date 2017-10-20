@@ -904,6 +904,9 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 				{
 					printf("\t\t\t\tType : 				'Text'\n");
 					printf("\t\t\t\tText : 				'%s'\n\n", TextContent);
+					fprintf(nfc_log,"		\"Text\" : \"");
+					fprintf(nfc_log,TextContent);
+					fprintf(nfc_log,"\"");
 				}
 				else
 				{
