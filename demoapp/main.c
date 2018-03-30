@@ -1289,7 +1289,7 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 			if(eDevType_TAG == g_Dev_Type)
 			{
 				nfc_log= fopen("/root/userdir/nfc.log", "w+");
-        jsonObj = son_object();
+        jsonObj = json_object();
 				fprintf(nfc_log,"{\n");
         memcpy(&TagInfo, &g_TagInfo, sizeof(nfc_tag_info_t));
 				framework_UnlockMutex(g_devLock);
