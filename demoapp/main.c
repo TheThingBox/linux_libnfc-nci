@@ -25,6 +25,10 @@
 #include <jansson.h>
 #include <mosquitto.h>
 
+#define BROKER_URL "localhost"
+#define BROKER_PORT 1883
+#define PUBLISH_URL "system/nfc/tag"
+
 typedef enum eDevState
 {
 	eDevState_NONE,
@@ -97,8 +101,8 @@ unsigned char *pT4T_NdefRecord = NULL;
 unsigned short T4T_NdefRecord_size = 0;
 json_t *jsonObj;
 
-char *host = "localhost";
-int port = 1883;
+char *host = BROKER_URL;
+int port = BROKER_PORT;
 int keepalive = 60;
 bool clean_session = true;
 struct mosquitto *mosq = NULL;
@@ -1516,7 +1520,7 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
                 }
 
         char * myJSON = json_dumps(jsonObj,JSON_COMPACT);
-        mosquitto_publish(mosq, NULL, "system/nfc/tag", strlen(myJSON), myJSON, 0, 0);
+        mosquitto_publish(mosq, NULL, PUBLISH_URL, strlen(myJSON), myJSON, 0, 0);
         free(myJSON);
  				framework_LockMutex(g_devLock);
 			}
