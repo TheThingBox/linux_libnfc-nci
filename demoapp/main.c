@@ -1386,17 +1386,18 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 						fprintf(nfc_log,"		\"UID\" :       \t\"");
 					}
 
-          //unsigned char buff[40];
+          unsigned char buff[100];
+	  int j=0;
 					for(i = 0x00; i < TagInfo.uid_length; i++)
 					{
 						fprintf(nfc_log,"%02X ", (unsigned char) TagInfo.uid[i]);
-            //sprintf(buff,"%02X ", (unsigned char) TagInfo.uid[i]);
-            //buff[i]=(unsigned char) TagInfo.uid[i];
+            j+=sprintf(buff+j,"%02X", (unsigned char) TagInfo.uid[i]);
 					}
-          //buff[i+1]='\0';
+printf("After loop\n");
+          buff[j+1]='\0';
 					fprintf(nfc_log,"\",\n");
-          printf("%s\n", TagInfo.uid);
-          json_object_set(jsonObj,"UID",json_string(TagInfo.uid));
+          printf("%s\n", buff);
+          json_object_set(jsonObj,"UID",json_string(buff));
 				}
 
 				res = nfcTag_isNdef(TagInfo.handle, &NDEFinfo);
