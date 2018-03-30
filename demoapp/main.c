@@ -1395,7 +1395,7 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 					}
           //buff[i+1]='\0';
 					fprintf(nfc_log,"\",\n");
-          //printf("%s\n", buff);
+          printf("%s\n", TagInfo.uid);
           json_object_set(jsonObj,"UID",json_string(TagInfo.uid));
 				}
 
