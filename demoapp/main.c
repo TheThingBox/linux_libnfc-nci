@@ -23,6 +23,7 @@
 #include "linux_nfc_api.h"
 #include "tools.h"
 #include <jansson.h>
+#include <mosquitto.h>
 
 typedef enum eDevState
 {
@@ -96,6 +97,13 @@ unsigned char *pT4T_NdefRecord = NULL;
 unsigned short T4T_NdefRecord_size = 0;
 FILE *nfc_log;
 json_t *jsonObj;
+
+char *host = "localhost";
+int port = 1883;
+int keepalive = 60;
+bool clean_session = true;
+struct mosquitto *mosq = NULL;
+
 
 
 typedef void T4T_NDEF_EMU_Callback_t (unsigned char*, unsigned short);
@@ -1513,6 +1521,7 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
         printf("Final JSON\n");
         char * myJSON = json_dumps(jsonObj,JSON_COMPACT);
         printf("-> %s\n",myJSON);
+        mosquitto_publish(mosq, NULL, "system/nfc/tag", strlen(myJSON), myJSON, 0, 0);
         free(myJSON);
  				framework_LockMutex(g_devLock);
 			}
@@ -1968,6 +1977,7 @@ void cmd_poll(int arg_len, char** arg)
 {
 	int res = 0x00;
 
+
 /*
 	printf("#########################################################################################\n");
 	printf("##                                       NFC demo                                      ##\n");
@@ -1987,7 +1997,25 @@ void cmd_poll(int arg_len, char** arg)
 
 		if(0x00 == res)
 		{
+      mosquitto_lib_init();
+    	mosq = mosquitto_new(NULL, clean_session, NULL);
+    	if(!mosq){
+    		fprintf(stderr, "Error: Out of memory.\n");
+    		return 1;
+    	}
+      if(mosquitto_connect(mosq, host, port, keepalive)){
+    		fprintf(stderr, "Unable to connect.\n");
+    		return 1;
+    	}
+      int loop = mosquitto_loop_start(mosq);
+      if(loop != MOSQ_ERR_SUCCESS){
+        fprintf(stderr, "Unable to start loop: %i\n", loop);
+        return 1;
+      }
+
 			WaitDeviceArrival(0x01, NULL , 0x00);
+
+      mosquitto_loop_stop(mosq,1);
 		}
 
 		res = DeinitPollMode();
