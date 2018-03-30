@@ -910,7 +910,7 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 					fprintf(nfc_log,TextContent);
 					fprintf(nfc_log,"\"");
           json_object_set(jsonObj,"Type",json_string("Text"));
-          json_object_set(jsonObj,"Text",json_string("TextContent"));
+          json_object_set(jsonObj,"Text",json_string(TextContent));
 				}
 				else
 				{
