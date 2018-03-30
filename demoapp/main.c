@@ -1511,7 +1511,9 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 				fclose(nfc_log);
 
         printf("Final JSON\n");
-        printf("%s",json_dumps(jsonObj,JSON_COMPACT));
+        char * myJSON = json_dumps(jsonObj,JSON_COMPACT)
+        printf("-> %s\n",myJSON);
+        free(myJSON);
  				framework_LockMutex(g_devLock);
 			}
 			else if(eDevType_P2P == g_Dev_Type)/*P2P Detected*/
