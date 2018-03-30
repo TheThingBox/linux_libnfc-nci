@@ -19,3 +19,11 @@ R1.0 is the first official release of Linux libnfc-nci stack
 Possible problems, known errors and restrictions of R2.2:
 ---------------------------------------------------------
 LLCP1.3 support requires OpenSSL Cryptography and SSL/TLS Toolkit (version 1.0.1j or later)
+
+Lib to install
+--------------
+
+libmosquitto-dev
+libjansson-dev
+
+sudo apt-get install libjansson libmosquitto
