@@ -95,7 +95,6 @@ const unsigned char T4T_NDEF_EMU_NOK[] = {0x6A, 0x82};
 
 unsigned char *pT4T_NdefRecord = NULL;
 unsigned short T4T_NdefRecord_size = 0;
-FILE *nfc_log;
 json_t *jsonObj;
 
 char *host = "localhost";
@@ -914,9 +913,6 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 				{
 					printf("\t\t\t\tType : 				'Text'\n");
 					printf("\t\t\t\tText : 				'%s'\n\n", TextContent);
-					fprintf(nfc_log,"		\"Text\" : \"");
-					fprintf(nfc_log,TextContent);
-					fprintf(nfc_log,"\"");
           json_object_set(jsonObj,"MessageType",json_string("Text"));
           json_object_set(jsonObj,"Text",json_string(TextContent));
 				}
@@ -1296,83 +1292,84 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 			DevTypeBck = g_Dev_Type;
 			if(eDevType_TAG == g_Dev_Type)
 			{
-				nfc_log= fopen("/root/userdir/nfc.log", "w+");
+
         jsonObj = json_object();
-				fprintf(nfc_log,"{\n");
+
         memcpy(&TagInfo, &g_TagInfo, sizeof(nfc_tag_info_t));
 				framework_UnlockMutex(g_devLock);
-				fprintf(nfc_log,"		\"Type\" : ");
+
 				switch (TagInfo.technology)
 				{
 					case TARGET_TYPE_UNKNOWN:
 					{
-						fprintf(nfc_log,"		'Type Unknown',\n");
+
             json_object_set(jsonObj,"Type",json_string("Type Unknown"));
 					} break;
 					case TARGET_TYPE_ISO14443_3A:
 					{
-						fprintf(nfc_log,"		\"Type A\",\n");
+
             json_object_set(jsonObj,"Type",json_string("Type A"));
 					} break;
 					case TARGET_TYPE_ISO14443_3B:
 					{
-						fprintf(nfc_log,"		\"Type 4B\",\n");
+
             json_object_set(jsonObj,"Type",json_string("Type 4B"));
 					} break;
 					case TARGET_TYPE_ISO14443_4:
 					{
-						fprintf(nfc_log,"		\"Type 4A\",\n");
+
             json_object_set(jsonObj,"Type",json_string("Type 4A"));
 					} break;
 					case TARGET_TYPE_FELICA:
 					{
-						fprintf(nfc_log,"		\"Type F\",\n");
+
             json_object_set(jsonObj,"Type",json_string("Type F"));
 					} break;
 					case TARGET_TYPE_ISO15693:
 					{
-						fprintf(nfc_log,"		\"Type V\",\n");
+
             json_object_set(jsonObj,"Type",json_string("Type V"));
 					} break;
 					case TARGET_TYPE_NDEF:
 					{
-						fprintf(nfc_log,"		\"Type NDEF\",\n");
+
             json_object_set(jsonObj,"Type",json_string("Type NDEF"));
 					} break;
 					case TARGET_TYPE_NDEF_FORMATABLE:
 					{
-						fprintf(nfc_log,"		\"Type Formatable\",\n");
+
             json_object_set(jsonObj,"Type",json_string("Type Formatable"));
 					} break;
 					case TARGET_TYPE_MIFARE_CLASSIC:
 					{
-						fprintf(nfc_log,"		\"Type A - Mifare Classic\",\n");
+
             json_object_set(jsonObj,"Type",json_string("Type A - Mifare Classic"));
 					} break;
 					case TARGET_TYPE_MIFARE_UL:
 					{
-						fprintf(nfc_log,"		\"Type A - Mifare Ul\",\n");
+
             json_object_set(jsonObj,"Type",json_string("Type A - Mifare Ul"));
 					} break;
 					case TARGET_TYPE_KOVIO_BARCODE:
 					{
-						fprintf(nfc_log,"		\"Type A - Kovio Barcode\",\n");
+
             json_object_set(jsonObj,"Type",json_string("Type A - Kovio Barcode"));
 					} break;
 					case TARGET_TYPE_ISO14443_3A_3B:
 					{
-						fprintf(nfc_log,"		\"Type A/B\",\n");
+
             json_object_set(jsonObj,"Type",json_string("Type A/B"));
 					} break;
 					default:
 					{
-						fprintf(nfc_log,"		\"Type %d (Unknown or not supported)\",\n", TagInfo.technology);
+
             json_object_set(jsonObj,"Type",json_string("Type (Unknown or not supported)"));
 					} break;
 				}
 				/*32 is max UID len (Kovio tags)*/
 				if((0x00 != TagInfo.uid_length) && (32 >= TagInfo.uid_length))
 				{
+					/*
 					if(4 == TagInfo.uid_length || 7 == TagInfo.uid_length || 10 == TagInfo.uid_length)
 					{
 						fprintf(nfc_log,"		\"NFCID1\" :    \t\"");
@@ -1385,18 +1382,16 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 					{
 						fprintf(nfc_log,"		\"UID\" :       \t\"");
 					}
-
+					*/
           unsigned char buff[100];
 	  int j=0;
 					for(i = 0x00; i < TagInfo.uid_length; i++)
 					{
-						fprintf(nfc_log,"%02X ", (unsigned char) TagInfo.uid[i]);
+						//fprintf(nfc_log,"%02X ", (unsigned char) TagInfo.uid[i]);
             j+=sprintf(buff+j,"%02X", (unsigned char) TagInfo.uid[i]);
 					}
-printf("After loop\n");
+
           buff[j+1]='\0';
-					fprintf(nfc_log,"\",\n");
-          printf("%s\n", buff);
           json_object_set(jsonObj,"UID",json_string(buff));
 				}
 
@@ -1408,7 +1403,7 @@ printf("After loop\n");
 				}
 				else
 				{
-					fprintf(nfc_log,"\t\t\"NDEF Content\" : \"NO, mode=%d, tech=%d\",\n", mode, TagInfo.technology);
+
           char buff[100];
           sprintf(buff,"NO, mode=%d, tech=%d",mode, TagInfo.technology);
           json_object_set(jsonObj,"NDEF Content",json_string(buff));
@@ -1450,13 +1445,13 @@ printf("After loop\n");
 						else
 						{
 							//printf("\n\t\tMifare Authenticate command sent\n\t\tResponse : \n\t\t");
-							fprintf(nfc_log,"\t\t\"Response auth\" : \t\t\"");
+							/*
 							for(i = 0x00; i < (unsigned int) res; i++)
 							{
 								fprintf(nfc_log,"%02X ", MifareAuthResp[i]);
 							}
 							fprintf(nfc_log,"\",\n");
-
+							*/
 							res = nfcTag_transceive(TagInfo.handle, MifareReadCmd, 2, MifareResp, 255, 500);
 							if(0x00 == res)
 							{
@@ -1465,12 +1460,14 @@ printf("After loop\n");
 							else
 							{
 								//printf("\n\t\tMifare Read command sent\n\t\tResponse : \n\t\t");
+								/*
 								fprintf(nfc_log,"\t\t\"Response read\" : \t\t\"");
 								for(i = 0x00; i < (unsigned int)res; i++)
 								{
 									fprintf(nfc_log,"%02X ", MifareResp[i]);
 								}
 								fprintf(nfc_log,"\"\n");
+								*/
 							}
 						}
 					}
@@ -1517,12 +1514,8 @@ printf("After loop\n");
 						}
 					}
                 }
-				fprintf(nfc_log,"}\n");
-				fclose(nfc_log);
 
-        printf("Final JSON\n");
         char * myJSON = json_dumps(jsonObj,JSON_COMPACT);
-        printf("-> %s\n",myJSON);
         mosquitto_publish(mosq, NULL, "system/nfc/tag", strlen(myJSON), myJSON, 0, 0);
         free(myJSON);
  				framework_LockMutex(g_devLock);
