@@ -15,19 +15,20 @@
  *  limitations under the License.
  *
  ******************************************************************************/
- 
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
 #include "linux_nfc_api.h"
 #include "tools.h"
+#include <jansson.h>
 
 typedef enum eDevState
 {
 	eDevState_NONE,
-	eDevState_WAIT_ARRIVAL, 
-	eDevState_PRESENT, 
+	eDevState_WAIT_ARRIVAL,
+	eDevState_PRESENT,
 	eDevState_WAIT_DEPARTURE,
 	eDevState_DEPARTED,
 	eDevState_EXIT
@@ -94,6 +95,7 @@ const unsigned char T4T_NDEF_EMU_NOK[] = {0x6A, 0x82};
 unsigned char *pT4T_NdefRecord = NULL;
 unsigned short T4T_NdefRecord_size = 0;
 FILE *nfc_log;
+json_t *jsonObj;
 
 
 typedef void T4T_NDEF_EMU_Callback_t (unsigned char*, unsigned short);
@@ -198,7 +200,7 @@ void T4T_NDEF_EMU_Next(unsigned char *pCmd, unsigned short Cmd_size, unsigned ch
 	{
 		memcpy(&pRsp[*pRsp_size], T4T_NDEF_EMU_OK, sizeof(T4T_NDEF_EMU_OK));
 		*pRsp_size += sizeof(T4T_NDEF_EMU_OK);
-	} 
+	}
 	else
 	{
 		memcpy(pRsp, T4T_NDEF_EMU_NOK, sizeof(T4T_NDEF_EMU_NOK));
@@ -208,16 +210,16 @@ void T4T_NDEF_EMU_Next(unsigned char *pCmd, unsigned short Cmd_size, unsigned ch
 }
 
 /********************************** CallBack **********************************/
- 
+
 
 void onDataReceived(unsigned char *data, unsigned int data_length)
 {
 	framework_LockMutex(g_HCELock);
-	
+
 	HCE_dataLenght = data_length;
 	HCE_data = malloc(HCE_dataLenght * sizeof(unsigned char));
 	memcpy(HCE_data, data, data_length);
-	
+
 	if(eHCEState_NONE == g_HCEState)
 	{
 		g_HCEState = eHCEState_DATA_RECEIVED;
@@ -227,16 +229,16 @@ void onDataReceived(unsigned char *data, unsigned int data_length)
 		g_HCEState = eHCEState_DATA_RECEIVED;
 		framework_NotifyMutex(g_HCELock, 0);
 	}
-	
+
 	framework_UnlockMutex(g_HCELock);
 }
 
 void onHostCardEmulationActivated()
 {
 	framework_LockMutex(g_devLock);
-	
+
 	T4T_NDEF_EMU_Reset();
-	
+
 	if(eDevState_WAIT_ARRIVAL == g_DevState)
 	{
 		printf("\tNFC Reader Found\n\n");
@@ -268,7 +270,7 @@ void onHostCardEmulationActivated()
 void onHostCardEmulationDeactivated()
 {
 	framework_LockMutex(g_devLock);
-	
+
 	if(eDevState_WAIT_DEPARTURE == g_DevState)
 	{
 		printf("\tNFC Reader Lost\n\n");
@@ -294,7 +296,7 @@ void onHostCardEmulationDeactivated()
 		g_Dev_Type = eDevType_NONE;
 	}
 	framework_UnlockMutex(g_devLock);
-	
+
 	framework_LockMutex(g_HCELock);
 	if(eHCEState_WAIT_DATA == g_HCEState)
 	{
@@ -303,7 +305,7 @@ void onHostCardEmulationDeactivated()
 	}
 	else if(eHCEState_EXIT == g_HCEState)
 	{
-		
+
 	}
 	else
 	{
@@ -311,13 +313,13 @@ void onHostCardEmulationDeactivated()
 	}
 	framework_UnlockMutex(g_HCELock);
 }
- 
+
 void onTagArrival(nfc_tag_info_t *pTagInfo)
 {
 	framework_LockMutex(g_devLock);
-	
+
 	if(eDevState_WAIT_ARRIVAL == g_DevState)
-	{	
+	{
 		//printf("\tNFC Tag Found\n\n");
 		memcpy(&g_TagInfo, pTagInfo, sizeof(nfc_tag_info_t));
 		g_DevState = eDevState_PRESENT;
@@ -325,7 +327,7 @@ void onTagArrival(nfc_tag_info_t *pTagInfo)
 		framework_NotifyMutex(g_devLock, 0);
 	}
 	else if(eDevState_WAIT_DEPARTURE == g_DevState)
-	{	
+	{
 		memcpy(&g_TagInfo, pTagInfo, sizeof(nfc_tag_info_t));
 		g_DevState = eDevState_PRESENT;
 		g_Dev_Type = eDevType_TAG;
@@ -347,10 +349,10 @@ void onTagArrival(nfc_tag_info_t *pTagInfo)
 }
 
 void onTagDeparture(void)
-{	
+{
 	framework_LockMutex(g_devLock);
-	
-	
+
+
 	if(eDevState_WAIT_DEPARTURE == g_DevState)
 	{
 		//printf("\tNFC Tag Lost\n\n");
@@ -360,7 +362,7 @@ void onTagDeparture(void)
 	}
 	else if(eDevState_WAIT_ARRIVAL == g_DevState)
 	{
-	}	
+	}
 	else if(eDevState_EXIT == g_DevState)
 	{
 	}
@@ -375,7 +377,7 @@ void onTagDeparture(void)
 void onDeviceArrival (void)
 {
 	framework_LockMutex(g_devLock);
-	
+
 	switch(g_DevState)
 	{
 		case eDevState_WAIT_DEPARTURE:
@@ -409,7 +411,7 @@ void onDeviceArrival (void)
 			g_DevState = eDevState_PRESENT;
 		} break;
 	}
-	
+
 	framework_UnlockMutex(g_devLock);
 }
 
@@ -417,7 +419,7 @@ void onDeviceArrival (void)
 void onDeviceDeparture (void)
 {
 	framework_LockMutex(g_devLock);
-	
+
 	switch(g_DevState)
 	{
 		case eDevState_WAIT_DEPARTURE:
@@ -450,9 +452,9 @@ void onDeviceDeparture (void)
 	}
 
 	framework_UnlockMutex(g_devLock);
-	
+
 	framework_LockMutex(g_SnepClientLock);
-	
+
 	switch(g_SnepClientState)
 	{
 		case eSnepClientState_WAIT_OFF:
@@ -476,7 +478,7 @@ void onDeviceDeparture (void)
 		{
 		} break;
 	}
-	
+
 	framework_UnlockMutex(g_SnepClientLock);
 }
 
@@ -491,7 +493,7 @@ void onMessageReceived(unsigned char *message, unsigned int length)
 void onSnepClientReady()
 {
 	framework_LockMutex(g_devLock);
-	
+
 	switch(g_DevState)
 	{
 		case eDevState_WAIT_DEPARTURE:
@@ -527,9 +529,9 @@ void onSnepClientReady()
 	}
 
 	framework_UnlockMutex(g_devLock);
-	
+
 	framework_LockMutex(g_SnepClientLock);
-	
+
 	switch(g_SnepClientState)
 	{
 		case eSnepClientState_WAIT_OFF:
@@ -553,14 +555,14 @@ void onSnepClientReady()
 		{
 		} break;
 	}
-	
+
 	framework_UnlockMutex(g_SnepClientLock);
 }
 
 void onSnepClientClosed()
 {
 	framework_LockMutex(g_devLock);
-	
+
 	switch(g_DevState)
 	{
 		case eDevState_WAIT_DEPARTURE:
@@ -592,9 +594,9 @@ void onSnepClientClosed()
 		} break;
 	}
 	framework_UnlockMutex(g_devLock);
-	
+
 	framework_LockMutex(g_SnepClientLock);
-	
+
 	switch(g_SnepClientState)
 	{
 		case eSnepClientState_WAIT_OFF:
@@ -618,29 +620,29 @@ void onSnepClientClosed()
 		{
 		} break;
 	}
-	
+
 	framework_UnlockMutex(g_SnepClientLock);
 }
- 
+
 int InitMode(int tag, int p2p, int hce)
 {
 	int res = 0x00;
-	
+
 	g_TagCB.onTagArrival = onTagArrival;
 	g_TagCB.onTagDeparture = onTagDeparture;
-		
+
 	g_SnepServerCB.onDeviceArrival = onDeviceArrival;
 	g_SnepServerCB.onDeviceDeparture = onDeviceDeparture;
 	g_SnepServerCB.onMessageReceived = onMessageReceived;
-	
+
 	g_SnepClientCB.onDeviceArrival = onSnepClientReady;
 	g_SnepClientCB.onDeviceDeparture = onSnepClientClosed;
-		
+
 	g_HceCB.onDataReceived = onDataReceived;
 	g_HceCB.onHostCardEmulationActivated = onHostCardEmulationActivated;
 	g_HceCB.onHostCardEmulationDeactivated = onHostCardEmulationDeactivated;
 
-	
+
 	if(0x00 == res)
 	{
 		res = nfcManager_doInitialize();
@@ -649,14 +651,14 @@ int InitMode(int tag, int p2p, int hce)
 			printf("NfcService Init Failed\n");
 		}
 	}
-	
+
 	if(0x00 == res)
 	{
 		if(0x01 == tag)
 		{
 			nfcManager_registerTagCallback(&g_TagCB);
 		}
-		
+
 		if(0x01 == p2p)
 		{
 			res = nfcSnep_registerClientCallback(&g_SnepClientCB);
@@ -666,7 +668,7 @@ int InitMode(int tag, int p2p, int hce)
 			}
 		}
 	}
-	
+
 	if(0x00 == res && 0x01 == hce)
 	{
 		nfcHce_registerHceCallback(&g_HceCB);
@@ -686,26 +688,26 @@ int InitMode(int tag, int p2p, int hce)
 			}
 		}
 	}
-	
+
 	return res;
 }
 
 int DeinitPollMode()
 {
 	int res = 0x00;
-	
+
 	nfcSnep_stopServer();
-	
+
 	nfcManager_disableDiscovery();
-	
+
 	nfcSnep_deregisterClientCallback();
-	
+
 	nfcManager_deregisterTagCallback();
-	
+
 	nfcHce_deregisterHceCallback();
-	
+
 	res = nfcManager_doDeinitialize();
-	
+
 	if(0x00 != res)
 	{
 		printf("NFC Service Deinit Failed\n");
@@ -716,10 +718,10 @@ int DeinitPollMode()
 int SnepPush(unsigned char* msgToPush, unsigned int len)
 {
 	int res = 0x00;
-	
+
 	framework_LockMutex(g_devLock);
 	framework_LockMutex(g_SnepClientLock);
-	
+
 	if(eSnepClientState_READY != g_SnepClientState && eSnepClientState_EXIT!= g_SnepClientState && eDevState_PRESENT == g_DevState)
 	{
 		framework_UnlockMutex(g_devLock);
@@ -730,12 +732,12 @@ int SnepPush(unsigned char* msgToPush, unsigned int len)
 	{
 		framework_UnlockMutex(g_devLock);
 	}
-	
+
 	if(eSnepClientState_READY == g_SnepClientState)
 	{
 		framework_UnlockMutex(g_SnepClientLock);
 		res = nfcSnep_putMessage(msgToPush, len);
-		
+
 		if(0x00 != res)
 		{
 			printf("\t\tPush Failed\n");
@@ -749,7 +751,7 @@ int SnepPush(unsigned char* msgToPush, unsigned int len)
 	{
 		framework_UnlockMutex(g_SnepClientLock);
 	}
-	
+
 	return res;
 }
 
@@ -773,7 +775,7 @@ int Format_MIFARE_CLASSIC(nfc_tag_info_t TagInfo)
     if(res == 0) return 0;
 
     for (i=0; i<4; i++)
-    {   
+    {
         res = nfcTag_transceive(TagInfo.handle, MifareReadCmd, sizeof(MifareReadCmd), MifareResp, sizeof(MifareResp), 500);
         if(res == 0) return 0;
     }
@@ -788,19 +790,19 @@ int Format_MIFARE_CLASSIC(nfc_tag_info_t TagInfo)
 	MifareAuthCmd[1] = 4;
     res = nfcTag_transceive(TagInfo.handle, MifareAuthCmd, sizeof(MifareAuthCmd), MifareResp, sizeof(MifareResp), 500);
     if((res == 0) || (MifareResp[1] != 0))
-    
+
     res = nfcTag_transceive(TagInfo.handle, MifareWrite4Cmd, sizeof(MifareWrite4Cmd), MifareResp, sizeof(MifareResp), 500);
     if(res == 0) return 0;
     res = nfcTag_transceive(TagInfo.handle, MifareWrite7Cmd, sizeof(MifareWrite7Cmd), MifareResp, sizeof(MifareResp), 500);
     if(res == 0) return 0;
-  
+
     return 1;
 }
 
 int WriteTag(nfc_tag_info_t TagInfo, unsigned char* msgToPush, unsigned int len)
 {
 	int res = 0x00;
-	
+
 	res = nfcTag_writeNdef(TagInfo.handle, msgToPush, len);
 	if(0x00 != res)
 	{
@@ -831,7 +833,7 @@ void PrintfNDEFInfo(ndef_info_t pNDEFinfo)
 			printf("\t\t\t\tReadOnly : 					    'TRUE'\n");
 		}
 	}
-	else	
+	else
 	{
 		printf("\t\tNo Record found\n");
 	}
@@ -887,7 +889,7 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 	{
 		printf("\t\t\t\tError : Invalid Parameters\n");
 	}
-	
+
 	if(res != ndefRawLen)
 	{
 		printf("\t\t\t\tRead NDEF Content Failed\n");
@@ -907,6 +909,8 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 					fprintf(nfc_log,"		\"Text\" : \"");
 					fprintf(nfc_log,TextContent);
 					fprintf(nfc_log,"\"");
+          json_object_set(jsonObj,"Type",json_string("Text"));
+          json_object_set(jsonObj,"Text",json_string("TextContent"));
 				}
 				else
 				{
@@ -947,7 +951,7 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 				if(0x00 == res)
 				{
 					printf("\n\t\tHandover Select : \n");
-					
+
 					printf("\t\tBluetooth : \n\t\t\t\tPower state : ");
 					switch(HandoverSelectContent.bluetooth.power_state)
 					{
@@ -990,7 +994,7 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 						printf("%02X ", HandoverSelectContent.bluetooth.address[i]);
 					}
 					printf("'\n\t\t\t\tDevice Name :  '");
-					for(i = 0x00; i < HandoverSelectContent.bluetooth.device_name_length; i++)	
+					for(i = 0x00; i < HandoverSelectContent.bluetooth.device_name_length; i++)
 					{
 						printf("%c ", HandoverSelectContent.bluetooth.device_name[i]);
 					}
@@ -1027,7 +1031,7 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 							printf(" 'Unknown'\n");
 						} break;
 					}
-					
+
 					printf("\t\t\t\tSSID :         '");
 					for(i = 0x01; i < HandoverSelectContent.wifi.ssid_length+1; i++)
 					{
@@ -1045,7 +1049,7 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 						{
 							printf("\n");
 						}
-					}				
+					}
 					printf("'\n\t\t\t\tNDEF Record : \n");
 					for(i = 0x01; i < HandoverSelectContent.wifi.ndef_length+1; i++)
 					{
@@ -1061,7 +1065,7 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 				{
 					printf("\n\t\tRead NDEF Handover Select Failed\n");
 				}
-				
+
 			} break;
 			case NDEF_FRIENDLY_TYPE_HR:
 			{
@@ -1111,7 +1115,7 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 						printf("%02X ", HandoverRequestContent.bluetooth.address[i]);
 					}
 					printf("'\n\t\t\t\tDevice Name :  '");
-					for(i = 0x00; i < HandoverRequestContent.bluetooth.device_name_length; i++)	
+					for(i = 0x00; i < HandoverRequestContent.bluetooth.device_name_length; i++)
 					{
 						printf("%c ", HandoverRequestContent.bluetooth.device_name[i]);
 					}
@@ -1171,7 +1175,7 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 							}
 						}
 						printf("\n");
-						
+
 					} break;
 					case NDEF_TNF_URI:
 					{
@@ -1225,7 +1229,7 @@ void PrintNDEFContent(nfc_tag_info_t* TagInfo, ndef_info_t* NDEFinfo, unsigned c
 		}
 		printf("\n\n");
 	}
-	
+
 	if(NULL != NDEFContent)
 	{
 		free(NDEFContent);
@@ -1247,16 +1251,16 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 	unsigned char MifareReadCmd[] = {0x30U,  /*block*/ 0x00};
 	unsigned char MifareWriteCmd[] = {0xA2U,  /*block*/ 0x04, 0xFF, 0xFF, 0xFF, 0xFF};
 	unsigned char MifareResp[255];
-	
+
 	unsigned char HCEReponse[255];
 	short unsigned int HCEResponseLen = 0x00;
-	
+
 	nfc_tag_info_t TagInfo;
-	
+
 	MifareAuthCmd[1] = block;
 	memcpy(&MifareAuthCmd[6], key, 6);
 	MifareReadCmd[1] = block;
-	
+
 	do
 	{
 		framework_LockMutex(g_devLock);
@@ -1265,28 +1269,29 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 			framework_UnlockMutex(g_devLock);
 			break;
 		}
-		
+
 		else if(eDevState_PRESENT != g_DevState)
 		{
 			//printf("Waiting for a Tag/Device...\n\n");
 			g_DevState = eDevState_WAIT_ARRIVAL;
 			framework_WaitMutex(g_devLock, 0);
 		}
-		
+
 		if(eDevState_EXIT == g_DevState)
 		{
 			framework_UnlockMutex(g_devLock);
 			break;
 		}
-		
+
 		if(eDevState_PRESENT == g_DevState)
 		{
 			DevTypeBck = g_Dev_Type;
 			if(eDevType_TAG == g_Dev_Type)
 			{
 				nfc_log= fopen("/root/userdir/nfc.log", "w+");
+        jsonObj = son_object();
 				fprintf(nfc_log,"{\n");
-                                memcpy(&TagInfo, &g_TagInfo, sizeof(nfc_tag_info_t));
+        memcpy(&TagInfo, &g_TagInfo, sizeof(nfc_tag_info_t));
 				framework_UnlockMutex(g_devLock);
 				fprintf(nfc_log,"		\"Type\" : ");
 				switch (TagInfo.technology)
@@ -1294,54 +1299,67 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 					case TARGET_TYPE_UNKNOWN:
 					{
 						fprintf(nfc_log,"		'Type Unknown',\n");
+            json_object_set(jsonObj,"Type",json_string("Type Unknown"));
 					} break;
 					case TARGET_TYPE_ISO14443_3A:
 					{
 						fprintf(nfc_log,"		\"Type A\",\n");
+            json_object_set(jsonObj,"Type",json_string("Type A"));
 					} break;
 					case TARGET_TYPE_ISO14443_3B:
 					{
 						fprintf(nfc_log,"		\"Type 4B\",\n");
+            json_object_set(jsonObj,"Type",json_string("Type 4B"));
 					} break;
 					case TARGET_TYPE_ISO14443_4:
 					{
 						fprintf(nfc_log,"		\"Type 4A\",\n");
+            json_object_set(jsonObj,"Type",json_string("Type 4A"));
 					} break;
 					case TARGET_TYPE_FELICA:
 					{
 						fprintf(nfc_log,"		\"Type F\",\n");
+            json_object_set(jsonObj,"Type",json_string("Type F"));
 					} break;
 					case TARGET_TYPE_ISO15693:
 					{
 						fprintf(nfc_log,"		\"Type V\",\n");
+            json_object_set(jsonObj,"Type",json_string("Type V"));
 					} break;
 					case TARGET_TYPE_NDEF:
 					{
 						fprintf(nfc_log,"		\"Type NDEF\",\n");
+            json_object_set(jsonObj,"Type",json_string("Type NDEF"));
 					} break;
 					case TARGET_TYPE_NDEF_FORMATABLE:
 					{
 						fprintf(nfc_log,"		\"Type Formatable\",\n");
+            json_object_set(jsonObj,"Type",json_string("Type Formatable"));
 					} break;
 					case TARGET_TYPE_MIFARE_CLASSIC:
 					{
 						fprintf(nfc_log,"		\"Type A - Mifare Classic\",\n");
+            json_object_set(jsonObj,"Type",json_string("Type A - Mifare Classic"));
 					} break;
 					case TARGET_TYPE_MIFARE_UL:
 					{
 						fprintf(nfc_log,"		\"Type A - Mifare Ul\",\n");
+            json_object_set(jsonObj,"Type",json_string("Type A - Mifare Ul"));
 					} break;
 					case TARGET_TYPE_KOVIO_BARCODE:
 					{
 						fprintf(nfc_log,"		\"Type A - Kovio Barcode\",\n");
+            json_object_set(jsonObj,"Type",json_string("Type A - Kovio Barcode"));
 					} break;
 					case TARGET_TYPE_ISO14443_3A_3B:
 					{
-						fprintf(nfc_log,"		\#Type A/B\",\n");
+						fprintf(nfc_log,"		\"Type A/B\",\n");
+            json_object_set(jsonObj,"Type",json_string("Type A/B"));
 					} break;
 					default:
 					{
 						fprintf(nfc_log,"		\"Type %d (Unknown or not supported)\",\n", TagInfo.technology);
+            json_object_set(jsonObj,"Type",json_string("Type (Unknown or not supported)"));
 					} break;
 				}
 				/*32 is max UID len (Kovio tags)*/
@@ -1357,14 +1375,19 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 					}
 					else
 					{
-						fprintf(nfc_log,"		\#UID\" :       \t\"");
+						fprintf(nfc_log,"		\"UID\" :       \t\"");
 					}
-					
+
+          unsigned char buff[40];
 					for(i = 0x00; i < TagInfo.uid_length; i++)
 					{
 						fprintf(nfc_log,"%02X ", (unsigned char) TagInfo.uid[i]);
+            //sprintf(buff,"%02X ", (unsigned char) TagInfo.uid[i]);
+            buff[i]=(unsigned char) TagInfo.uid[i];
 					}
+          buff[i+1]='\0';
 					fprintf(nfc_log,"\",\n");
+          json_object_set(jsonObj,"UID",json_string(buff));
 				}
 
 				res = nfcTag_isNdef(TagInfo.handle, &NDEFinfo);
@@ -1376,7 +1399,9 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 				else
 				{
 					fprintf(nfc_log,"\t\t\"NDEF Content\" : \"NO, mode=%d, tech=%d\",\n", mode, TagInfo.technology);
-					
+          char buff[100];
+          sprintf(buff,"NO, mode=%d, tech=%d",mode, TagInfo.technology);
+          json_object_set(jsonObj,"NDEF Content",json_string(buff));
 			        if(0x03 == mode)
 			        {
                         if(TARGET_TYPE_MIFARE_CLASSIC == TagInfo.technology)
@@ -1421,7 +1446,7 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 								fprintf(nfc_log,"%02X ", MifareAuthResp[i]);
 							}
 							fprintf(nfc_log,"\",\n");
-							
+
 							res = nfcTag_transceive(TagInfo.handle, MifareReadCmd, 2, MifareResp, 255, 500);
 							if(0x00 == res)
 							{
@@ -1484,56 +1509,59 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
                 }
 				fprintf(nfc_log,"}\n");
 				fclose(nfc_log);
+
+        printf("Final JSON\n");
+        printf("%s",json_dumps(jsonObj,JSON_COMPACT);
  				framework_LockMutex(g_devLock);
 			}
 			else if(eDevType_P2P == g_Dev_Type)/*P2P Detected*/
 			{
 				framework_UnlockMutex(g_devLock);
  				printf("\tDevice Found\n");
-				
+
 				if(2 == mode)
 				{
 					SnepPush(msgToSend, len);
 				}
-				
+
 				framework_LockMutex(g_SnepClientLock);
-	
+
 				if(eSnepClientState_READY == g_SnepClientState)
 				{
 					g_SnepClientState = eSnepClientState_WAIT_OFF;
 					framework_WaitMutex(g_SnepClientLock, 0);
 				}
-				
+
 				framework_UnlockMutex(g_SnepClientLock);
 				framework_LockMutex(g_devLock);
-		
+
 			}
 			else if(eDevType_READER == g_Dev_Type)
-			{				
+			{
 				framework_LockMutex(g_HCELock);
 				do
 				{
 					framework_UnlockMutex(g_devLock);
-				
+
 					if(eHCEState_NONE == g_HCEState)
 					{
 						g_HCEState = eHCEState_WAIT_DATA;
 						framework_WaitMutex(g_HCELock, 0x00);
 					}
-					
+
 					if(eHCEState_DATA_RECEIVED == g_HCEState)
 					{
 						g_HCEState = eHCEState_NONE;
-						
+
 						if(HCE_data != NULL)
 						{
 							printf("\t\tReceived data from remote device : \n\t\t");
-							
+
 							for(i = 0x00; i < HCE_dataLenght; i++)
 							{
 								printf("%02X ", HCE_data[i]);
 							}
-							
+
 							/*Call HCE response builder*/
 							T4T_NDEF_EMU_Next(HCE_data, HCE_dataLenght, HCEReponse, &HCEResponseLen);
 
@@ -1567,7 +1595,7 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 				framework_UnlockMutex(g_devLock);
 				break;
 			}
-			
+
 			if(eDevState_PRESENT == g_DevState)
 			{
 				g_DevState = eDevState_WAIT_DEPARTURE;
@@ -1583,18 +1611,18 @@ int WaitDeviceArrival(int mode, unsigned char* msgToSend, unsigned int len)
 				printf("\tDevice Lost\n\n");
 			}
 		}
-		
+
 		framework_UnlockMutex(g_devLock);
 	}while(0x01);
-	
+
 	return res;
 }
 
-void strtolower(char * string) 
+void strtolower(char * string)
 {
     unsigned int i = 0x00;
-    
-    for(i = 0; i < strlen(string); i++) 
+
+    for(i = 0; i < strlen(string); i++)
     {
         string[i] = tolower(string[i]);
     }
@@ -1605,7 +1633,7 @@ char* strRemovceChar(const char* str, char car)
 	unsigned int i = 0x00;
 	unsigned int index = 0x00;
 	char * dest = (char*)malloc((strlen(str) + 1) * sizeof(char));
-	
+
 	for(i = 0x00; i < strlen(str); i++)
 	{
 		if(str[i] != car)
@@ -1624,24 +1652,24 @@ int convertParamtoBuffer(char* param, unsigned char** outBuffer, unsigned int* o
 	int index = 0x00;
 	char atoiBuf[3];
 	atoiBuf[2] = '\0';
-	
-	if(NULL == param || NULL == outBuffer || NULL == outBufferLen)	
+
+	if(NULL == param || NULL == outBuffer || NULL == outBufferLen)
 	{
 		printf("Parameter Error\n");
 		res = 0xFF;
 	}
-	
+
 	if(0x00 == res)
 	{
 		param = strRemovceChar(param, ' ');
 	}
-	
+
 	if(0x00 == res)
 	{
 		if(0x00 == strlen(param) % 2)
 		{
 			*outBufferLen = strlen(param) / 2;
-			
+
 			*outBuffer = (unsigned char*) malloc((*outBufferLen) * sizeof(unsigned char));
 			if(NULL != *outBuffer)
 			{
@@ -1664,7 +1692,7 @@ int convertParamtoBuffer(char* param, unsigned char** outBuffer, unsigned int* o
 		}
 		free(param);
 	}
-		
+
 	return res;
 }
 
@@ -1683,7 +1711,7 @@ int BuildNDEFMessage(int arg_len, char** arg, unsigned char** outNDEFBuffer, uns
 	char* carrier_state = NULL;
 	char* carrier_name = NULL;
 	char* carrier_data = NULL;
-	
+
 	if(0xFF == LookForTag(arg, arg_len, "-t", &type, 0x00) && 0xFF == LookForTag(arg, arg_len, "--type", &type, 0x01))
 	{
 		res = 0xFF;
@@ -1725,7 +1753,7 @@ int BuildNDEFMessage(int arg_len, char** arg, unsigned char** outNDEFBuffer, uns
 				printf("Representation missing (-r)\n");
 				res = 0xFF;
 			}
-			
+
 			if(0xFF == LookForTag(arg, arg_len, "-l", &lang, 0x00) && 0xFF == LookForTag(arg, arg_len, "--lang", &lang, 0x01))
 			{
 				printf("Language missing (-l)\n");
@@ -1744,7 +1772,7 @@ int BuildNDEFMessage(int arg_len, char** arg, unsigned char** outNDEFBuffer, uns
 				{
 					*outNDEFBufferLen = res;
 					res = 0x00;
-				}	
+				}
 			}
 			else
 			{
@@ -1767,10 +1795,10 @@ int BuildNDEFMessage(int arg_len, char** arg, unsigned char** outNDEFBuffer, uns
 			{
 				*outNDEFBufferLen = strlen(mime_data) +  strlen(mime_type) + 30; /*TODO : replace 30 by MIME NDEF message header*/
 				*outNDEFBuffer = (unsigned char*) malloc(*outNDEFBufferLen * sizeof(unsigned char));
-				
+
 
 				res = convertParamtoBuffer(mime_data, &ndef_msg, &ndef_msg_len);
-				
+
 				if(0x00 == res)
 				{
 					res = ndef_createMime(mime_type, ndef_msg, ndef_msg_len, *outNDEFBuffer, *outNDEFBufferLen);
@@ -1792,7 +1820,7 @@ int BuildNDEFMessage(int arg_len, char** arg, unsigned char** outNDEFBuffer, uns
 		}
 		else if(0x00 == strcmp(type, "hs"))
 		{
-			
+
 			if(0xFF == LookForTag(arg, arg_len, "-cs", &carrier_state, 0x00) && 0xFF == LookForTag(arg, arg_len, "--carrierState", &carrier_state, 0x01))
 			{
 				printf("Carrier Power State missing (-cs)\n");
@@ -1803,20 +1831,20 @@ int BuildNDEFMessage(int arg_len, char** arg, unsigned char** outNDEFBuffer, uns
 				printf("Carrier Reference Name missing (-cn)\n");
 				res = 0xFF;
 			}
-			
+
 			if(0xFF == LookForTag(arg, arg_len, "-d", &carrier_data, 0x00) && 0xFF == LookForTag(arg, arg_len, "--data", &carrier_data, 0x01))
 			{
 				printf("NDEF Data missing (-d)\n");
 				res = 0xFF;
 			}
-			
+
 			if(0x00 == res)
 			{
 				*outNDEFBufferLen = strlen(carrier_name) + strlen(carrier_data) + 30;  /*TODO : replace 30 by HS NDEF message header*/
 				*outNDEFBuffer = (unsigned char*) malloc(*outNDEFBufferLen * sizeof(unsigned char));
-				
+
 				strtolower(carrier_state);
-				
+
 				if(0x00 == strcmp(carrier_state, "inactive"))
 				{
 					cps = HANDOVER_CPS_INACTIVE;
@@ -1834,12 +1862,12 @@ int BuildNDEFMessage(int arg_len, char** arg, unsigned char** outNDEFBuffer, uns
 					printf("Error : unknown carrier power state %s\n", carrier_state);
 					res = 0xFF;
 				}
-				
+
 				if(0x00 == res)
 				{
 					res = convertParamtoBuffer(carrier_data, &ndef_msg, &ndef_msg_len);
 				}
-				
+
 				if(0x00 == res)
 				{
 					res = ndef_createHandoverSelect(cps, carrier_name, ndef_msg, ndef_msg_len, *outNDEFBuffer, *outNDEFBufferLen);
@@ -1865,14 +1893,14 @@ int BuildNDEFMessage(int arg_len, char** arg, unsigned char** outNDEFBuffer, uns
 			res = 0xFF;
 		}
 	}
-	
+
 	if(NULL != ndef_msg)
 	{
 		free(ndef_msg);
 		ndef_msg = NULL;
 		ndef_msg_len = 0x00;
 	}
-	
+
 	return res;
 }
 
@@ -1884,7 +1912,7 @@ int LookForTag(char** args, int args_len, char* tag, char** data, int format)
 	int res = 0xFF;
 	int i = 0x00;
 	int found = 0xFF;
-	
+
 	for(i = 0x00; i < args_len; i++)
 	{
 		found = 0xFF;
@@ -1897,7 +1925,7 @@ int LookForTag(char** args, int args_len, char* tag, char** data, int format)
 		{
 			found = strncmp(args[i], tag, strlen(tag));
 		}
-		
+
 		if(0x00 == found)
 		{
 			if(NULL != data)
@@ -1929,22 +1957,22 @@ int LookForTag(char** args, int args_len, char* tag, char** data, int format)
 			}
 		}
 	}
-	
+
 	return res;
 }
- 
+
 
 void cmd_poll(int arg_len, char** arg)
 {
 	int res = 0x00;
-	
+
 /*
 	printf("#########################################################################################\n");
 	printf("##                                       NFC demo                                      ##\n");
 	printf("#########################################################################################\n");
 	printf("##                                 Poll mode activated                                 ##\n");
 	printf("#########################################################################################\n");
-*/	
+*/
 	InitEnv();
 
 	if(0x00 == LookForTag(arg, arg_len, "-h", NULL, 0x00) || 0x00 == LookForTag(arg, arg_len, "--help", NULL, 0x01))
@@ -1954,34 +1982,34 @@ void cmd_poll(int arg_len, char** arg)
 	else
 	{
 		res = InitMode(0x01, 0x01, 0x00);
-		
+
 		if(0x00 == res)
 		{
 			WaitDeviceArrival(0x01, NULL , 0x00);
 		}
-	
+
 		res = DeinitPollMode();
 	}
-	
-	
+
+
 //	printf("Leaving ...\n");
 }
 
- 
+
 void cmd_push(int arg_len, char** arg)
 {
 	int res = 0x00;
 	unsigned char * NDEFMsg = NULL;
 	unsigned int NDEFMsgLen = 0x00;
-	
+
 	printf("#########################################################################################\n");
 	printf("##                                       NFC demo                                      ##\n");
 	printf("#########################################################################################\n");
 	printf("##                                 Push mode activated                                 ##\n");
 	printf("#########################################################################################\n");
-	
+
 	InitEnv();
-	
+
 	if(0x00 == LookForTag(arg, arg_len, "-h", NULL, 0x00) || 0x00 == LookForTag(arg, arg_len, "--help", NULL, 0x01))
 	{
 		help(0x02);
@@ -1989,28 +2017,28 @@ void cmd_push(int arg_len, char** arg)
 	else
 	{
 		res = InitMode(0x01, 0x01, 0x00);
-		
+
 		if(0x00 == res)
 		{
 			res = BuildNDEFMessage(arg_len, arg, &NDEFMsg, &NDEFMsgLen);
 		}
-		
+
 		if(0x00 == res)
 		{
 			WaitDeviceArrival(0x02, NDEFMsg, NDEFMsgLen);
 		}
-		
+
 		if(NULL != NDEFMsg)
 		{
 			free(NDEFMsg);
 			NDEFMsg = NULL;
 			NDEFMsgLen = 0x00;
 		}
-		
+
 		res = DeinitPollMode();
 	}
-	
-	
+
+
 	printf("Leaving ...\n");
 }
 
@@ -2019,15 +2047,15 @@ void cmd_share(int arg_len, char** arg)
 	int res = 0x00;
 	unsigned char * NDEFMsg = NULL;
 	unsigned int NDEFMsgLen = 0x00;
-	
+
 	printf("#########################################################################################\n");
 	printf("##                                       NFC demo                                      ##\n");
 	printf("#########################################################################################\n");
 	printf("##                                 Share mode activated                                ##\n");
 	printf("#########################################################################################\n");
-	
+
 	InitEnv();
-	
+
 	if(0x00 == LookForTag(arg, arg_len, "-h", NULL, 0x00) || 0x00 == LookForTag(arg, arg_len, "--help", NULL, 0x01))
 	{
 		help(0x02);
@@ -2035,33 +2063,33 @@ void cmd_share(int arg_len, char** arg)
 	else
 	{
 		res = InitMode(0x00, 0x00, 0x01);
-		
+
 		if(0x00 == res)
 		{
 			res = BuildNDEFMessage(arg_len, arg, &NDEFMsg, &NDEFMsgLen);
 		}
-		
+
 		if(0x00 == res)
 		{
 			T4T_NDEF_EMU_SetRecord(NDEFMsg, NDEFMsgLen, NULL);
 		}
-		
+
 		if(0x00 == res)
 		{
 			WaitDeviceArrival(0x04, NDEFMsg, NDEFMsgLen);
 		}
-		
+
 		if(NULL != NDEFMsg)
 		{
 			free(NDEFMsg);
 			NDEFMsg = NULL;
 			NDEFMsgLen = 0x00;
 		}
-		
+
 		res = DeinitPollMode();
 	}
-	
-	
+
+
 	printf("Leaving ...\n");
 }
 
@@ -2070,15 +2098,15 @@ void cmd_write(int arg_len, char** arg)
 	int res = 0x00;
 	unsigned char * NDEFMsg = NULL;
 	unsigned int NDEFMsgLen = 0x00;
-	
+
 	printf("#########################################################################################\n");
 	printf("##                                       NFC demo                                      ##\n");
 	printf("#########################################################################################\n");
 	printf("##                                 Write mode activated                                ##\n");
 	printf("#########################################################################################\n");
-	
+
 	InitEnv();
-	
+
 	if(0x00 == LookForTag(arg, arg_len, "-h", NULL, 0x00) || 0x00 == LookForTag(arg, arg_len, "--help", NULL, 0x01))
 	{
 		help(0x02);
@@ -2086,39 +2114,39 @@ void cmd_write(int arg_len, char** arg)
 	else
 	{
 		res = InitMode(0x01, 0x01, 0x00);
-		
+
 		if(0x00 == res)
 		{
 			res = BuildNDEFMessage(arg_len, arg, &NDEFMsg, &NDEFMsgLen);
 		}
-		
+
 		if(0x00 == res)
 		{
 			WaitDeviceArrival(0x03, NDEFMsg, NDEFMsgLen);
 		}
-		
+
 		if(NULL != NDEFMsg)
 		{
 			free(NDEFMsg);
 			NDEFMsg = NULL;
 			NDEFMsgLen = 0x00;
 		}
-		
+
 		res = DeinitPollMode();
 	}
-	
-	
+
+
 	printf("Leaving ...\n");
 }
 
 void* ExitThread(void* pContext)
 {
 	//printf("                              ... press enter to quit ...\n\n");
-/*	
+/*
 	getchar();
-	
+
 	framework_LockMutex(g_SnepClientLock);
-	
+
 	if(eSnepClientState_WAIT_OFF == g_SnepClientState || eSnepClientState_WAIT_READY == g_SnepClientState)
 	{
 		g_SnepClientState = eSnepClientState_EXIT;
@@ -2129,9 +2157,9 @@ void* ExitThread(void* pContext)
 		g_SnepClientState = eSnepClientState_EXIT;
 	}
 	framework_UnlockMutex(g_SnepClientLock);
-	
+
 	framework_LockMutex(g_devLock);
-	
+
 	if(eDevState_WAIT_ARRIVAL == g_DevState || eDevState_WAIT_DEPARTURE == g_DevState)
 	{
 		g_DevState = eDevState_EXIT;
@@ -2141,7 +2169,7 @@ void* ExitThread(void* pContext)
 	{
 		g_DevState = eDevState_EXIT;
 	}
-	
+
 	framework_UnlockMutex(g_devLock);
 */
 	return NULL;
@@ -2151,13 +2179,13 @@ int InitEnv()
 {
 	eResult tool_res = FRAMEWORK_SUCCESS;
 	int res = 0x00;
-	
+
 	tool_res = framework_CreateMutex(&g_devLock);
 	if(FRAMEWORK_SUCCESS != tool_res)
 	{
 		res = 0xFF;
 	}
-	
+
 	if(0x00 == res)
 	{
 		tool_res = framework_CreateMutex(&g_SnepClientLock);
@@ -2166,7 +2194,7 @@ int InitEnv()
 			res = 0xFF;
 		}
  	}
- 	
+
  	if(0x00 == res)
 	{
 		tool_res = framework_CreateMutex(&g_HCELock);
@@ -2194,13 +2222,13 @@ int CleanEnv()
 		framework_DeleteThread(g_ThreadHandle);
 		g_ThreadHandle = NULL;
 	}
-		
+
 	if(NULL != g_devLock)
 	{
 		framework_DeleteMutex(g_devLock);
 		g_devLock = NULL;
 	}
-	
+
 	if(NULL != g_SnepClientLock)
 	{
 		framework_DeleteMutex(g_SnepClientLock);
@@ -2213,7 +2241,7 @@ int CleanEnv()
 	}
 	return 0x00;
 }
- 
+
  int main(int argc, char ** argv)
  {
 	if (argc<2)
@@ -2243,13 +2271,13 @@ int CleanEnv()
 	}
 
 	printf("\n");
-	
+
 	CleanEnv();
-	
+
 	return 0;
  }
- 
- 
+
+
 void help(int mode)
 {
 	printf("\nCOMMAND: \n");
@@ -2262,7 +2290,7 @@ void help(int mode)
 	printf("Help Options:\n");
 	printf("-h, --help                       Show help options\n");
 	printf("\n");
-	
+
 	if(0x01 == mode)
 	{
 		printf("No Application Options for poll mode\n");
@@ -2276,7 +2304,7 @@ void help(int mode)
 		printf("\t MIME\n");
 		printf("\t HS (handover select)\n");
 		printf("\n");
-		
+
 		printf("Application Options : \n");
 		printf("\t-l,  --lang=en                   Language\n");
 		printf("\t-m,  --mime=audio/mp3            Mime-type\n");
