@@ -26,4 +26,4 @@ Lib to install
 libmosquitto-dev
 libjansson-dev
 
-sudo apt-get install libjansson libmosquitto
+sudo apt-get install libjansson-dev libmosquitto-dev
